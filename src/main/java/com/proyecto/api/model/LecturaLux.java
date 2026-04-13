@@ -21,8 +21,9 @@ public class LecturaLux {
     @Column(name = "valor_lux", nullable = false)
     private int valorLux;
 
-    @Column(name = "causa")
-    private String causa;
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "id_causa", nullable = false)
+    private CausaLux causa;
 
     @Column(name = "timestamp", nullable = false)
     private Instant timestamp;
@@ -74,14 +75,14 @@ public class LecturaLux {
      *
      * @return causa del snapshot
      */
-    public String  getCausa()             { return causa; }
+    public CausaLux getCausa()            { return causa; }
 
     /**
      * Define la causa que origino el cambio de lux.
      *
      * @param v causa del snapshot
      */
-    public void    setCausa(String v)     { this.causa = v; }
+    public void    setCausa(CausaLux v)   { this.causa = v; }
 
     /**
      * Obtiene la fecha y hora del snapshot.

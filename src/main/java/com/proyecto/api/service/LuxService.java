@@ -1,7 +1,9 @@
 package com.proyecto.api.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.proyecto.api.model.CausaLux;
 import com.proyecto.api.model.LecturaLux;
+import com.proyecto.api.repository.CausaLuxRepository;
 import com.proyecto.api.repository.LecturaLuxRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,16 +18,21 @@ import java.time.Instant;
 public class LuxService {
 
     private static final Logger log = LoggerFactory.getLogger(LuxService.class);
+    private static final String CAUSA_POR_DEFECTO = "STABLE";
 
     private final LecturaLuxRepository lecturaLuxRepo;
+    private final CausaLuxRepository   causaLuxRepo;
 
     /**
      * Constructor con inyeccion del repositorio de lecturas lux.
      *
      * @param lecturaLuxRepo repositorio de persistencia de lecturas
+     * @param causaLuxRepo repositorio del catalogo de causas de lux
      */
-    public LuxService(LecturaLuxRepository lecturaLuxRepo) {
+    public LuxService(LecturaLuxRepository lecturaLuxRepo,
+                      CausaLuxRepository causaLuxRepo) {
         this.lecturaLuxRepo = lecturaLuxRepo;
+        this.causaLuxRepo   = causaLuxRepo;
     }
 
     /**
@@ -41,12 +48,13 @@ public class LuxService {
             LecturaLux lectura = new LecturaLux();
             lectura.setIdAula(idAula);
             lectura.setValorLux(node.get("luxValue").asInt());
-            lectura.setCausa(node.has("cause") ? node.get("cause").asText() : "STABLE");
+                String nombreCausa = node.has("cause") ? node.get("cause").asText() : CAUSA_POR_DEFECTO;
+                lectura.setCausa(obtenerCausa(nombreCausa));
             lectura.setTimestamp(Instant.now());
 
             lecturaLuxRepo.save(lectura);
             log.debug("[LuxService] Lux persistido: aula={} lux={} causa={}",
-                    aulaId, lectura.getValorLux(), lectura.getCausa());
+                    aulaId, lectura.getValorLux(), lectura.getCausa().getNombre());
 
         } catch (Exception e) {
             log.error("[LuxService] Error al persistir snapshot de {}: {}", aulaId, e.getMessage());
@@ -62,5 +70,18 @@ public class LuxService {
     private int extraerIdAula(String aulaId) {
         String[] parts = aulaId.split("-");
         return Integer.parseInt(parts[parts.length - 1]);
+    }
+
+    /**
+     * Resuelve la causa por nombre y hace fallback a STABLE si no existe.
+     *
+     * @param nombreCausa nombre de la causa recibido por MQTT
+     * @return entidad de causa existente en catalogo
+     */
+    private CausaLux obtenerCausa(String nombreCausa) {
+        return causaLuxRepo.findByNombre(nombreCausa)
+                .or(() -> causaLuxRepo.findByNombre(CAUSA_POR_DEFECTO))
+                .orElseThrow(() -> new IllegalStateException(
+                        "No existe la causa '" + nombreCausa + "' ni la causa por defecto '" + CAUSA_POR_DEFECTO + "'"));
     }
 }

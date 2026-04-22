@@ -5,11 +5,15 @@ import com.proyecto.api.model.CausaLux;
 import com.proyecto.api.model.LecturaLux;
 import com.proyecto.api.repository.CausaLuxRepository;
 import com.proyecto.api.repository.LecturaLuxRepository;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Servicio encargado de transformar snapshots MQTT de lux en registros de base de datos.
@@ -22,6 +26,7 @@ public class LuxService {
 
     private final LecturaLuxRepository lecturaLuxRepo;
     private final CausaLuxRepository   causaLuxRepo;
+    private final Map<String, CausaLux> causaCache = new HashMap<>();
 
     /**
      * Constructor con inyeccion del repositorio de lecturas lux.
@@ -35,6 +40,12 @@ public class LuxService {
         this.causaLuxRepo   = causaLuxRepo;
     }
 
+    @PostConstruct
+    public void init() {
+        causaLuxRepo.findAll().forEach(c -> causaCache.put(c.getNombre(), c));
+        log.info("[LuxService] Catalogo causas_lux cargado: {} entradas", causaCache.size());
+    }
+
     /**
      * Procesa un payload de lux recibido por MQTT y lo persiste como lectura historica.
      *
@@ -44,12 +55,13 @@ public class LuxService {
     public void procesarSnapshot(String aulaId, JsonNode node) {
         try {
             int idAula = extraerIdAula(aulaId);
+            String nombreCausa = node.has("cause") ? node.get("cause").asText() : CAUSA_POR_DEFECTO;
+            CausaLux causa = obtenerCausa(nombreCausa);
 
             LecturaLux lectura = new LecturaLux();
             lectura.setIdAula(idAula);
             lectura.setValorLux(node.get("luxValue").asInt());
-                String nombreCausa = node.has("cause") ? node.get("cause").asText() : CAUSA_POR_DEFECTO;
-                lectura.setCausa(obtenerCausa(nombreCausa));
+            lectura.setCausa(causa);
             lectura.setTimestamp(Instant.now());
 
             lecturaLuxRepo.save(lectura);
@@ -59,6 +71,10 @@ public class LuxService {
         } catch (Exception e) {
             log.error("[LuxService] Error al persistir snapshot de {}: {}", aulaId, e.getMessage());
         }
+    }
+
+    public List<LecturaLux> obtenerHistorial(int idAula, int limite) {
+        return lecturaLuxRepo.findTopNByIdAulaOrderByTimestampDesc(idAula, limite);
     }
 
     /**
@@ -79,6 +95,16 @@ public class LuxService {
      * @return entidad de causa existente en catalogo
      */
     private CausaLux obtenerCausa(String nombreCausa) {
+        CausaLux causa = causaCache.get(nombreCausa);
+        if (causa != null) {
+            return causa;
+        }
+
+        CausaLux fallback = causaCache.get(CAUSA_POR_DEFECTO);
+        if (fallback != null) {
+            return fallback;
+        }
+
         return causaLuxRepo.findByNombre(nombreCausa)
                 .or(() -> causaLuxRepo.findByNombre(CAUSA_POR_DEFECTO))
                 .orElseThrow(() -> new IllegalStateException(

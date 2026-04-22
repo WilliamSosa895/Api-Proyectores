@@ -1,6 +1,7 @@
 package com.proyecto.api.mqtt;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.proyecto.api.service.EventoSistemaService;
 import org.eclipse.paho.client.mqttv3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,14 +19,17 @@ public class MqttPublisherService {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final MqttClient mqttClient;
+    private final EventoSistemaService eventoService;
 
     /**
      * Constructor con inyeccion del cliente MQTT compartido.
      *
      * @param mqttClient cliente MQTT configurado por Spring
      */
-    public MqttPublisherService(MqttClient mqttClient) {
+    public MqttPublisherService(MqttClient mqttClient,
+                                EventoSistemaService eventoService) {
         this.mqttClient = mqttClient;
+        this.eventoService = eventoService;
     }
 
     /**
@@ -49,11 +53,17 @@ public class MqttPublisherService {
             msg.setQos(1);
             msg.setRetained(false);
             mqttClient.publish(topic, msg);
+            eventoService.registrarComando(extraerIdAula(aulaId), topic, payload);
             log.info("[MQTT-Pub] {} → {}", topic, payload);
         } catch (MqttException e) {
             log.error("[MQTT-Pub] Error publicando en {}: {}", topic, e.getMessage());
             throw new RuntimeException("Error al enviar comando MQTT", e);
         }
+    }
+
+    private int extraerIdAula(String aulaId) {
+        String[] parts = aulaId.split("-");
+        return Integer.parseInt(parts[parts.length - 1]);
     }
 
     /**

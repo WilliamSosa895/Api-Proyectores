@@ -3,6 +3,7 @@ package com.proyecto.api.mqtt;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.proyecto.api.service.DispositivoService;
+import com.proyecto.api.service.EventoSistemaService;
 import com.proyecto.api.service.LuxService;
 import com.proyecto.api.websocket.WebSocketEventPublisher;
 import jakarta.annotation.PostConstruct;
@@ -24,6 +25,7 @@ public class MqttSubscriberService {
     private final MqttClient              mqttClient;
     private final LuxService              luxService;
     private final DispositivoService      dispositivoService;
+    private final EventoSistemaService    eventoService;
     private final WebSocketEventPublisher wsPublisher;
 
     @Value("${mqtt.topic.subscribe}")
@@ -40,10 +42,12 @@ public class MqttSubscriberService {
     public MqttSubscriberService(MqttClient mqttClient,
                                   LuxService luxService,
                                   DispositivoService dispositivoService,
+                                  EventoSistemaService eventoService,
                                   WebSocketEventPublisher wsPublisher) {
         this.mqttClient         = mqttClient;
         this.luxService         = luxService;
         this.dispositivoService = dispositivoService;
+        this.eventoService      = eventoService;
         this.wsPublisher        = wsPublisher;
     }
 
@@ -80,20 +84,28 @@ public class MqttSubscriberService {
 
             String aulaId = parts[1]; // "aula-1"
             String tipo   = parts[2]; // "lux_sensor", "light", "blind", etc.
+            int idAula    = extraerIdAula(aulaId);
 
             JsonNode node = JSON.readTree(payload);
 
             if ("lux_sensor".equals(tipo)) {
                 luxService.procesarSnapshot(aulaId, node);
+                eventoService.registrar("lectura_sensor", idAula, topic, payload);
                 wsPublisher.publicarLux(aulaId, payload);
 
             } else {
                 dispositivoService.actualizarEstado(aulaId, tipo, node);
+                eventoService.registrar("estado_actualizado", idAula, topic, payload);
                 wsPublisher.publicarEstadoDispositivo(aulaId, tipo, payload);
             }
 
         } catch (Exception e) {
             log.error("[MQTT-Sub] Error procesando mensaje de {}: {}", topic, e.getMessage());
         }
+    }
+
+    private int extraerIdAula(String aulaId) {
+        String[] parts = aulaId.split("-");
+        return Integer.parseInt(parts[parts.length - 1]);
     }
 }

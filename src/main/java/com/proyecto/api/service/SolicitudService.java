@@ -31,6 +31,7 @@ public class SolicitudService {
     private final SolicitudRepository    solicitudRepo;
     private final LecturaLuxRepository   luxRepo;
     private final MqttPublisherService   mqtt;
+    private final EventoSistemaService   eventoService;
 
     /**
      * Constructor con inyeccion de repositorios y publicador MQTT.
@@ -41,10 +42,12 @@ public class SolicitudService {
      */
     public SolicitudService(SolicitudRepository solicitudRepo,
                              LecturaLuxRepository luxRepo,
-                             MqttPublisherService mqtt) {
+                             MqttPublisherService mqtt,
+                             EventoSistemaService eventoService) {
         this.solicitudRepo = solicitudRepo;
         this.luxRepo       = luxRepo;
         this.mqtt          = mqtt;
+        this.eventoService = eventoService;
     }
 
     /**
@@ -64,6 +67,11 @@ public class SolicitudService {
 
         log.info("[Solicitud] Nueva solicitud #{} — aula={} usuario={}",
                 solicitud.getIdSolicitud(), idAula, idUsuario);
+
+        eventoService.registrarSolicitud(idAula,
+            "{\"idSolicitud\":" + solicitud.getIdSolicitud()
+                + ",\"idUsuario\":" + idUsuario
+                + ",\"estado\":\"PROCESANDO\"}");
 
         String aulaId = "aula-" + idAula;
         ejecutarFlujo(solicitud.getIdSolicitud(), aulaId);

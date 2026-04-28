@@ -1,5 +1,6 @@
 package com.proyecto.api.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 @Entity
@@ -21,6 +22,10 @@ public class Usuario {
     @Column(name = "estado", nullable = false)
     private String estado = "activo";
 
+    @JsonIgnore
+    @Column(name = "password_hash", nullable = false)
+    private String passwordHash;
+
     public int    getIdUsuario()          { return idUsuario; }
     public void   setIdUsuario(int v)     { this.idUsuario = v; }
 
@@ -32,4 +37,7 @@ public class Usuario {
 
     public String getEstado()             { return estado; }
     public void   setEstado(String v)     { this.estado = v; }
+
+    public String getPasswordHash()       { return passwordHash; }
+    public void   setPasswordHash(String v) { this.passwordHash = v; }
 }

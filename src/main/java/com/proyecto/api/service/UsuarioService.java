@@ -6,6 +6,7 @@ import com.proyecto.api.repository.RolRepository;
 import com.proyecto.api.repository.UsuarioRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,10 +20,14 @@ public class UsuarioService {
 
     private final UsuarioRepository usuarioRepo;
     private final RolRepository     rolRepo;
+    private final PasswordEncoder   passwordEncoder;
 
-    public UsuarioService(UsuarioRepository usuarioRepo, RolRepository rolRepo) {
-        this.usuarioRepo = usuarioRepo;
-        this.rolRepo     = rolRepo;
+    public UsuarioService(UsuarioRepository usuarioRepo,
+                          RolRepository rolRepo,
+                          PasswordEncoder passwordEncoder) {
+        this.usuarioRepo     = usuarioRepo;
+        this.rolRepo         = rolRepo;
+        this.passwordEncoder = passwordEncoder;
     }
 
     // ------------------------------------------------------------------ listar
@@ -40,11 +45,23 @@ public class UsuarioService {
     }
 
     // ------------------------------------------------------------------ crear
-    // body esperado: { "nombre": "Juan", "idRol": 2 }
+    // body esperado: { "nombre": "Juan", "password": "Clave123!", "idRol": 2 }
 
     public Usuario crear(Map<String, Object> body) {
-        String nombre = (String) body.get("nombre");
-        int    idRol  = (int)    body.get("idRol");
+        String nombre   = (String) body.get("nombre");
+        String password = (String) body.get("password");
+        int    idRol    = (int) body.get("idRol");
+
+        if (nombre == null || nombre.isBlank()) {
+            throw new RuntimeException("El nombre es obligatorio");
+        }
+        if (password == null || password.length() < 6) {
+            throw new RuntimeException("La contrasena debe tener al menos 6 caracteres");
+        }
+
+        if (usuarioRepo.findByNombre(nombre).isPresent()) {
+            throw new RuntimeException("Ya existe un usuario con ese nombre");
+        }
 
         Rol rol = rolRepo.findById(idRol)
                 .orElseThrow(() -> new RuntimeException("Rol no encontrado: " + idRol));
@@ -53,6 +70,7 @@ public class UsuarioService {
         usuario.setNombre(nombre);
         usuario.setRol(rol);
         usuario.setEstado("activo");
+        usuario.setPasswordHash(passwordEncoder.encode(password));
 
         Usuario guardado = usuarioRepo.save(usuario);
         log.info("[UsuarioService] Usuario creado: id={} nombre={} rol={}",
@@ -68,7 +86,20 @@ public class UsuarioService {
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado: " + idUsuario));
 
         if (body.containsKey("nombre")) {
-            usuario.setNombre((String) body.get("nombre"));
+            String nuevoNombre = (String) body.get("nombre");
+            usuarioRepo.findByNombre(nuevoNombre).ifPresent(u -> {
+                if (u.getIdUsuario() != idUsuario) {
+                    throw new RuntimeException("El nombre ya esta en uso");
+                }
+            });
+            usuario.setNombre(nuevoNombre);
+        }
+        if (body.containsKey("password")) {
+            String nuevaPassword = (String) body.get("password");
+            if (nuevaPassword == null || nuevaPassword.length() < 6) {
+                throw new RuntimeException("La contrasena debe tener al menos 6 caracteres");
+            }
+            usuario.setPasswordHash(passwordEncoder.encode(nuevaPassword));
         }
         if (body.containsKey("idRol")) {
             int idRol = (int) body.get("idRol");

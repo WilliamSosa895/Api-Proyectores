@@ -10,8 +10,10 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Servicio de orquestacion del flujo automatico de proyeccion en aula.
@@ -160,8 +162,45 @@ public class SolicitudService {
         return Map.of(
             "idSolicitud",    s.getIdSolicitud(),
             "estado",         s.getEstado(),
+            "idAula",         s.getIdAula(),
             "fechaSolicitud", s.getFechaSolicitud().toString()
         );
+    }
+
+    /**
+     * Lista el historial de solicitudes de un usuario en orden descendente.
+     *
+     * @param idUsuario identificador del usuario
+     * @return listado resumido de solicitudes
+     */
+    public List<Map<String, Object>> listarPorUsuario(int idUsuario) {
+        return solicitudRepo.findByIdUsuarioOrderByFechaSolicitudDesc(idUsuario)
+                .stream()
+                .map(s -> Map.<String, Object>of(
+                    "idSolicitud",    s.getIdSolicitud(),
+                    "idAula",         s.getIdAula(),
+                    "estado",         s.getEstado(),
+                    "fechaSolicitud", s.getFechaSolicitud().toString()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Lista el historial de solicitudes de un aula en orden descendente.
+     *
+     * @param idAula identificador del aula
+     * @return listado resumido de solicitudes
+     */
+    public List<Map<String, Object>> listarPorAula(int idAula) {
+        return solicitudRepo.findByIdAulaOrderByFechaSolicitudDesc(idAula)
+                .stream()
+                .map(s -> Map.<String, Object>of(
+                    "idSolicitud",    s.getIdSolicitud(),
+                    "idUsuario",      s.getIdUsuario(),
+                    "estado",         s.getEstado(),
+                    "fechaSolicitud", s.getFechaSolicitud().toString()
+                ))
+                .collect(Collectors.toList());
     }
 
     /**

@@ -13,6 +13,14 @@ import java.util.List;
 public interface SolicitudRepository extends JpaRepository<Solicitud, Integer> {
 
     /**
+     * Recupera solicitudes de un usuario ordenadas de mas reciente a mas antigua.
+     *
+     * @param idUsuario identificador de usuario
+     * @return historial de solicitudes del usuario
+     */
+    List<Solicitud> findByIdUsuarioOrderByFechaSolicitudDesc(int idUsuario);
+
+    /**
      * Recupera solicitudes de un aula ordenadas de mas reciente a mas antigua.
      *
      * @param idAula identificador de aula

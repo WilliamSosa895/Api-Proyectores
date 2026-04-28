@@ -1,9 +1,11 @@
 package com.proyecto.api.controller;
 
+import com.proyecto.api.security.JwtUtil;
 import com.proyecto.api.service.SolicitudService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -15,14 +17,16 @@ import java.util.Map;
 public class SolicitudController {
 
     private final SolicitudService solicitudService;
+    private final JwtUtil jwtUtil;
 
     /**
      * Constructor con inyeccion del servicio de solicitudes.
      *
      * @param solicitudService servicio de orquestacion de solicitudes
      */
-    public SolicitudController(SolicitudService solicitudService) {
+    public SolicitudController(SolicitudService solicitudService, JwtUtil jwtUtil) {
         this.solicitudService = solicitudService;
+        this.jwtUtil = jwtUtil;
     }
 
     /**
@@ -33,10 +37,21 @@ public class SolicitudController {
      */
     @PostMapping
     public ResponseEntity<Map<String, Object>> crearSolicitud(
-            @RequestBody Map<String, Integer> body) {
+            @RequestBody Map<String, Integer> body,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
         int idAula    = body.get("idAula");
-        int idUsuario = body.get("idUsuario");
+        Integer idUsuarioBody = body.get("idUsuario");
+
+        int idUsuario;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            idUsuario = jwtUtil.extraerIdUsuario(authHeader.substring(7));
+        } else if (idUsuarioBody != null) {
+            idUsuario = idUsuarioBody;
+        } else {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "idUsuario es requerido si no se envia token"));
+        }
 
         Map<String, Object> resultado = solicitudService.iniciarFlujoProyeccion(idAula, idUsuario);
         return ResponseEntity.ok(resultado);
@@ -52,5 +67,30 @@ public class SolicitudController {
     public ResponseEntity<Map<String, Object>> obtenerSolicitud(@PathVariable int id) {
         Map<String, Object> estado = solicitudService.obtenerEstado(id);
         return ResponseEntity.ok(estado);
+    }
+
+    /**
+     * Consulta historial de solicitudes del usuario autenticado.
+     *
+     * @param authHeader encabezado Authorization con Bearer token
+     * @return historial del usuario
+     */
+    @GetMapping("/mis-solicitudes")
+    public ResponseEntity<List<Map<String, Object>>> misSolicitudes(
+            @RequestHeader("Authorization") String authHeader) {
+
+        int idUsuario = jwtUtil.extraerIdUsuario(authHeader.substring(7));
+        return ResponseEntity.ok(solicitudService.listarPorUsuario(idUsuario));
+    }
+
+    /**
+     * Consulta historial de solicitudes por aula.
+     *
+     * @param idAula identificador de aula
+     * @return historial del aula
+     */
+    @GetMapping
+    public ResponseEntity<List<Map<String, Object>>> porAula(@RequestParam int idAula) {
+        return ResponseEntity.ok(solicitudService.listarPorAula(idAula));
     }
 }

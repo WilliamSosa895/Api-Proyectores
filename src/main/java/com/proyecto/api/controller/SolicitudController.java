@@ -58,6 +58,34 @@ public class SolicitudController {
     }
 
     /**
+     * Apaga el proyector de un aula.
+     *
+     * @param body cuerpo JSON con idAula e idUsuario
+     * @return confirmacion de apagado
+     */
+    @PostMapping("/apagar")
+    public ResponseEntity<Map<String, Object>> apagarProyector(
+            @RequestBody Map<String, Integer> body,
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+
+        int idAula    = body.get("idAula");
+        Integer idUsuarioBody = body.get("idUsuario");
+
+        int idUsuario;
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            idUsuario = jwtUtil.extraerIdUsuario(authHeader.substring(7));
+        } else if (idUsuarioBody != null) {
+            idUsuario = idUsuarioBody;
+        } else {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "idUsuario es requerido si no se envia token"));
+        }
+
+        Map<String, Object> resultado = solicitudService.apagarProyector(idAula, idUsuario);
+        return ResponseEntity.ok(resultado);
+    }
+
+    /**
      * Consulta el estado actual de una solicitud existente.
      *
      * @param id identificador de solicitud

@@ -204,6 +204,63 @@ public class SolicitudService {
     }
 
     /**
+     * Apaga el proyector del aula (flujo inverso al encendido).
+     *
+     * @param idAula aula donde se desea apagar la proyeccion
+     * @param idUsuario usuario que realiza la solicitud
+     * @return respuesta resumida para el cliente HTTP
+     */
+    public Map<String, Object> apagarProyector(int idAula, int idUsuario) {
+        log.info("[Apago] Solicitud de apagado — aula={} usuario={}", idAula, idUsuario);
+
+        String aulaId = "aula-" + idAula;
+        ejecutarApagoProyector(aulaId);
+
+        return Map.of(
+            "estado",  "APAGANDO",
+            "mensaje", "Proyector apagándose... Recogiendo telón y luz."
+        );
+    }
+
+    /**
+     * Ejecuta el apagado del proyector y retorno del aula a estado normal.
+     *
+     * @param aulaId identificador logico de aula con formato aula-N
+     */
+    @Async
+    public void ejecutarApagoProyector(String aulaId) {
+        log.info("[Apago] Iniciando para {}", aulaId);
+
+        try {
+            log.info("[Apago] Apagando proyector en {}", aulaId);
+            mqtt.apagarProyector(aulaId);
+
+            Thread.sleep(1000);
+
+            log.info("[Apago] Recogiendo telón en {}", aulaId);
+            mqtt.recogerTelon(aulaId);
+
+            Thread.sleep(ESPERA_ACCION_MS);
+
+            log.info("[Apago] Abriendo persianas en {}", aulaId);
+            mqtt.subirPersianas(aulaId);
+
+            Thread.sleep(ESPERA_ACCION_MS);
+
+            log.info("[Apago] Encendiendo luces en {}", aulaId);
+            mqtt.encenderLuces(aulaId);
+
+            log.info("[Apago] Proyección finalizada en {}", aulaId);
+
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("[Apago] Flujo interrumpido en {}", aulaId);
+        } catch (Exception e) {
+            log.error("[Apago] Error en flujo de apagado en {}: {}", aulaId, e.getMessage());
+        }
+    }
+
+    /**
      * Obtiene la lectura de lux mas reciente para un aula.
      *
      * @param idAula identificador numerico de aula

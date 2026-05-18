@@ -32,7 +32,7 @@ CREATE TABLE roles (
 
 COMMENT ON TABLE  roles            IS 'Catálogo de roles disponibles en el sistema.';
 COMMENT ON COLUMN roles.id_rol     IS 'Identificador único del rol (PK, autoincremental).';
-COMMENT ON COLUMN roles.nombre_rol IS 'Nombre descriptivo del rol (Administrador, Docente, Técnico).';
+COMMENT ON COLUMN roles.nombre_rol IS 'Nombre descriptivo del rol (Administrador, Docente).';
 
 
 -- ============================================================
@@ -362,8 +362,7 @@ CREATE INDEX idx_dispositivos_tipo ON dispositivos     (id_tipo);
 -- Roles
 INSERT INTO roles (nombre_rol) VALUES
     ('Administrador'),
-    ('Docente'),
-    ('Técnico');
+    ('Docente');
 
 -- Tipos de dispositivo
 -- CRÍTICO: estos nombres deben coincidir exactamente con los
@@ -404,30 +403,73 @@ INSERT INTO tipo_de_evento (descripcion) VALUES
 -- ============================================================
 
 -- Aulas del sistema
-INSERT INTO aulas (ubicacion, estado) VALUES
-    ('Edificio A - Aula 1', 'disponible'),
-    ('Edificio A - Aula 2', 'disponible');
+-- Nota: se agregan con guardas para evitar duplicados por ubicación.
+INSERT INTO aulas (ubicacion, estado)
+SELECT 'Edificio A - Aula 1', 'disponible'
+WHERE NOT EXISTS (SELECT 1 FROM aulas WHERE ubicacion = 'Edificio A - Aula 1');
 
--- Dispositivos — 6 tipos × 2 aulas = 12 filas
--- El campo "nombre" usa el formato {tipo}-{aulaId}, que es
--- el mismo clientId con el que cada emulador se conecta a EMQX.
--- id_tipo referencia los valores insertados arriba:
---   1=lux_sensor, 2=light, 3=blind, 4=screen, 5=projector, 6=monitor
-INSERT INTO dispositivos (id_aula, id_tipo, nombre, estado_actual) VALUES
-    -- Aula 1
-    (1, 1, 'lux_sensor-aula-1', 'UNKNOWN'),
-    (1, 2, 'light-aula-1',      'OFF'),
-    (1, 3, 'blind-aula-1',      'OPEN'),
-    (1, 4, 'screen-aula-1',     'RETRACTED'),
-    (1, 5, 'projector-aula-1',  'OFF'),
-    (1, 6, 'monitor-aula-1',    'OFF'),
-    -- Aula 2
-    (2, 1, 'lux_sensor-aula-2', 'UNKNOWN'),
-    (2, 2, 'light-aula-2',      'OFF'),
-    (2, 3, 'blind-aula-2',      'OPEN'),
-    (2, 4, 'screen-aula-2',     'RETRACTED'),
-    (2, 5, 'projector-aula-2',  'OFF'),
-    (2, 6, 'monitor-aula-2',    'OFF');
+INSERT INTO aulas (ubicacion, estado)
+SELECT 'Edificio A - Aula 2', 'disponible'
+WHERE NOT EXISTS (SELECT 1 FROM aulas WHERE ubicacion = 'Edificio A - Aula 2');
+
+-- Nuevas aulas iniciales (opcion 1): ampliar capacidad sin tocar codigo.
+INSERT INTO aulas (ubicacion, estado)
+SELECT 'Edificio B - Aula 3', 'disponible'
+WHERE NOT EXISTS (SELECT 1 FROM aulas WHERE ubicacion = 'Edificio B - Aula 3');
+
+INSERT INTO aulas (ubicacion, estado)
+SELECT 'Edificio B - Aula 4', 'disponible'
+WHERE NOT EXISTS (SELECT 1 FROM aulas WHERE ubicacion = 'Edificio B - Aula 4');
+
+INSERT INTO aulas (ubicacion, estado)
+SELECT 'Edificio C - Aula 5', 'disponible'
+WHERE NOT EXISTS (SELECT 1 FROM aulas WHERE ubicacion = 'Edificio C - Aula 5');
+
+INSERT INTO aulas (ubicacion, estado)
+SELECT 'Edificio C - Aula 6', 'disponible'
+WHERE NOT EXISTS (SELECT 1 FROM aulas WHERE ubicacion = 'Edificio C - Aula 6');
+
+-- Dispositivos por aula (6 tipos por cada aula objetivo).
+-- Se evita depender de id_aula fijo y se evita duplicar por nombre unico.
+WITH aulas_objetivo AS (
+    SELECT id_aula, ubicacion,
+           CASE
+               WHEN ubicacion = 'Edificio A - Aula 1' THEN 'aula-1'
+               WHEN ubicacion = 'Edificio A - Aula 2' THEN 'aula-2'
+               WHEN ubicacion = 'Edificio B - Aula 3' THEN 'aula-3'
+               WHEN ubicacion = 'Edificio B - Aula 4' THEN 'aula-4'
+               WHEN ubicacion = 'Edificio C - Aula 5' THEN 'aula-5'
+               WHEN ubicacion = 'Edificio C - Aula 6' THEN 'aula-6'
+           END AS aula_slug
+    FROM aulas
+    WHERE ubicacion IN (
+        'Edificio A - Aula 1',
+        'Edificio A - Aula 2',
+        'Edificio B - Aula 3',
+        'Edificio B - Aula 4',
+        'Edificio C - Aula 5',
+        'Edificio C - Aula 6'
+    )
+), tipos_objetivo AS (
+    SELECT id_tipo, nombre_tipo FROM tipos_dispositivo
+    WHERE nombre_tipo IN ('lux_sensor', 'light', 'blind', 'screen', 'projector', 'monitor')
+)
+INSERT INTO dispositivos (id_aula, id_tipo, nombre, estado_actual)
+SELECT
+    a.id_aula,
+    t.id_tipo,
+    t.nombre_tipo || '-' || a.aula_slug AS nombre,
+    CASE
+        WHEN t.nombre_tipo = 'lux_sensor' THEN 'UNKNOWN'
+        WHEN t.nombre_tipo IN ('light', 'projector', 'monitor') THEN 'OFF'
+        WHEN t.nombre_tipo = 'blind' THEN 'OPEN'
+        WHEN t.nombre_tipo = 'screen' THEN 'RETRACTED'
+        ELSE 'UNKNOWN'
+    END AS estado_actual
+FROM aulas_objetivo a
+CROSS JOIN tipos_objetivo t
+WHERE a.aula_slug IS NOT NULL
+ON CONFLICT (nombre) DO NOTHING;
 
 -- Usuario administrador de prueba
 -- (en producción la contraseña iría hasheada en la columna correspondiente)

@@ -62,7 +62,17 @@ public class LuxService {
             lectura.setIdAula(idAula);
             lectura.setValorLux(node.get("luxValue").asInt());
             lectura.setCausa(causa);
-            lectura.setTimestamp(Instant.now());
+            // Preferir el timestamp enviado por el emulador si está presente
+            if (node.has("timestamp") && node.get("timestamp").canConvertToLong()) {
+                try {
+                    long ts = node.get("timestamp").asLong();
+                    lectura.setTimestamp(Instant.ofEpochMilli(ts));
+                } catch (Exception ex) {
+                    lectura.setTimestamp(Instant.now());
+                }
+            } else {
+                lectura.setTimestamp(Instant.now());
+            }
 
             lecturaLuxRepo.save(lectura);
             log.debug("[LuxService] Lux persistido: aula={} lux={} causa={}",
